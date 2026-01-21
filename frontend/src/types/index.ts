@@ -7,6 +7,11 @@ export interface Participant {
     isCurrentUser?: boolean;
 }
 
+export interface Item {
+    name: string;
+    price: number;
+}
+
 export interface Split {
     id: string;
     title: string;
@@ -16,4 +21,5 @@ export interface Split {
     status: 'active' | 'completed';
     receiptUrl?: string;
     participants: Participant[];
+    items?: Item[];
 }

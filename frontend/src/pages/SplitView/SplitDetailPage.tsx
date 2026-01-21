@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import { Share2, ChevronLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Share2, ChevronLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import { SplitHeader } from '../../components/Split/SplitHeader';
 import { ParticipantList } from '../../components/Split/ParticipantList';
+import { ItemList } from '../../components/Split/ItemList';
 import { ReceiptImage } from '../../components/Receipt/ReceiptImage';
 import { PaymentButton } from '../../components/Payment/PaymentButton';
 import { PaymentModal } from '../../components/Payment/PaymentModal';
 import { ShareModal } from '../../components/Split/ShareModal';
 import { signAndSubmitPayment } from '../../utils/stellar/wallet';
 import { LoadingSkeleton } from '../../components/Split/LoadingSkeleton';
-import type { Split } from '../../types';
-import { useEffect } from 'react';
+import type { Split, Participant } from '../../types';
 
 // Mock Data
 const MOCK_SPLIT: Split = {
@@ -25,6 +25,11 @@ const MOCK_SPLIT: Split = {
         { id: '2', name: 'Sarah M.', amountOwed: 112.50, status: 'paid', avatar: 'https://i.pravatar.cc/150?u=1' },
         { id: '3', name: 'Mike R.', amountOwed: 112.50, status: 'pending', avatar: 'https://i.pravatar.cc/150?u=2' },
         { id: '4', name: 'Jessica L.', amountOwed: 112.50, status: 'paid', avatar: 'https://i.pravatar.cc/150?u=3' },
+    ],
+    items: [
+        { name: 'Sashimi Platter', price: 120.00 },
+        { name: 'Wagyu Steak', price: 180.00 },
+        { name: 'Omakase Selection', price: 150.00 },
     ]
 };
 
@@ -34,6 +39,7 @@ export const SplitDetailPage = () => {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     // Simulate initial fetch
     useEffect(() => {
@@ -48,12 +54,17 @@ export const SplitDetailPage = () => {
         if (isLoading) return;
 
         const timer = setTimeout(() => {
-            setSplit(prev => ({
-                ...prev,
-                participants: prev.participants.map(p =>
-                    p.id === '3' ? { ...p, status: 'paid' } : p
-                )
-            }));
+            setSplit(prev => {
+                const newParticipants: Participant[] = prev.participants.map(p =>
+                    p.id === '3' ? { ...p, status: 'paid' as const } : p
+                );
+                const allPaid = newParticipants.every(p => p.status === 'paid');
+                return {
+                    ...prev,
+                    participants: newParticipants,
+                    status: allPaid ? 'completed' : prev.status
+                };
+            });
         }, 10000);
 
         return () => clearTimeout(timer);
@@ -75,15 +86,26 @@ export const SplitDetailPage = () => {
         try {
             const result = await signAndSubmitPayment(currentUser!.amountOwed, 'STELLAR_SPLIT_HUB');
             if (result.success) {
-                setSplit(prev => ({
-                    ...prev,
-                    participants: prev.participants.map(p =>
-                        p.isCurrentUser ? { ...p, status: 'paid' } : p
-                    )
-                }));
-                setIsPaymentModalOpen(false);
+                setPaymentStatus('success');
+                setSplit(prev => {
+                    const newParticipants: Participant[] = prev.participants.map(p =>
+                        p.isCurrentUser ? { ...p, status: 'paid' as const } : p
+                    );
+                    const allPaid = newParticipants.every(p => p.status === 'paid');
+                    return {
+                        ...prev,
+                        participants: newParticipants,
+                        status: allPaid ? 'completed' : prev.status
+                    };
+                });
+                setTimeout(() => {
+                    setIsPaymentModalOpen(false);
+                    setPaymentStatus('idle');
+                }, 1500);
             }
         } catch (error) {
+            setPaymentStatus('error');
+            setTimeout(() => setPaymentStatus('idle'), 3000);
             console.error("Payment failed", error);
         } finally {
             setIsProcessingPayment(false);
@@ -92,6 +114,16 @@ export const SplitDetailPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 pb-32 md:pb-12">
+            {/* Feedback Toast */}
+            {paymentStatus !== 'idle' && (
+                <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-top duration-300 ${paymentStatus === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+                    }`}>
+                    {paymentStatus === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    <span className="font-bold">
+                        {paymentStatus === 'success' ? 'Settled Successfully!' : 'Payment Failed. Try again.'}
+                    </span>
+                </div>
+            )}
             {/* Top Navigation */}
             <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex justify-between items-center px-4 py-3 md:hidden">
                 <button className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
@@ -124,6 +156,11 @@ export const SplitDetailPage = () => {
                 <SplitHeader split={split} />
 
                 <ReceiptImage imageUrl={split.receiptUrl} />
+
+                <ItemList
+                    items={split.items || []}
+                    currency={split.currency}
+                />
 
                 <ParticipantList
                     participants={split.participants}
