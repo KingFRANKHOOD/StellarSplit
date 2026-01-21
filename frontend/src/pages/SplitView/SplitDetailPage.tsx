@@ -6,7 +6,9 @@ import { ReceiptImage } from '../../components/Receipt/ReceiptImage';
 import { PaymentButton } from '../../components/Payment/PaymentButton';
 import { PaymentModal } from '../../components/Payment/PaymentModal';
 import { ShareModal } from '../../components/Split/ShareModal';
+import { LoadingSkeleton } from '../../components/Split/LoadingSkeleton';
 import type { Split } from '../../types';
+import { useEffect } from 'react';
 
 // Mock Data
 const MOCK_SPLIT: Split = {
@@ -27,12 +29,45 @@ const MOCK_SPLIT: Split = {
 
 export const SplitDetailPage = () => {
     const [split, setSplit] = useState<Split>(MOCK_SPLIT);
+    const [isLoading, setIsLoading] = useState(true);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+    // Simulate initial fetch
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Simulate real-time updates (e.g. Mike R. paying after 10 seconds)
+    useEffect(() => {
+        if (isLoading) return;
+
+        const timer = setTimeout(() => {
+            setSplit(prev => ({
+                ...prev,
+                participants: prev.participants.map(p =>
+                    p.id === '3' ? { ...p, status: 'paid' } : p
+                )
+            }));
+        }, 10000);
+
+        return () => clearTimeout(timer);
+    }, [isLoading]);
+
     const currentUser = split.participants.find(p => p.isCurrentUser);
     const shouldShowPayment = currentUser && currentUser.status === 'pending';
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 pt-16">
+                <LoadingSkeleton />
+            </div>
+        );
+    }
 
     const handlePayment = () => {
         setIsProcessingPayment(true);
